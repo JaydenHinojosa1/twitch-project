@@ -1,0 +1,279 @@
+---
+title: "Project"
+Authors: Jayden, Huan, Marcel
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+#install.packages("psych")
+library(psych)
+library(data.table)
+library(tidyverse)
+```
+
+
+```{r}
+data<-read_csv("socialblade.csv")
+```
+#Can the number of views could be estimated through a Regression Model? Let's start getting Pearson Coefficient and plotting the variables
+```{r}
+pairs.panels(data)
+```
+Estimating Views per Channel through a linear model doesn't seem to be a good idea through this dataset, the variable Views is not strongly correlated with any other variable. There is a strong correlation between the variable Views Per day (DeltaViews) and Followers per day (DeltaSubscriber)
+```{r}
+ggplot(data,aes(x=Subscribers,y=Views))+geom_point(aes(color=X5))
+```
+Once data is plotted it could be seen a pattern on the plots except for riotgames data. This channel streams World Championship League of Legends 2019. Perhaps it is not an habitual channel and it doesn't follow the pattern like the other channels. It will be considered an outlier, and it will be removed from this Analysis
+```{r}
+data1 <- data[-c(151:180), ]
+```
+```{r}
+pairs.panels(data1)
+```
+Now it could be seen a strong correlation between Views and Subscribers. Let's try to run a linear Model with Views as a dependent variable and Subscriber as an independet variable. 
+```{r}
+lmModel<-lm(data=data1,Views~Subscribers)
+summary(lmModel)
+```
+Once the Model is obtained, the pvalue near to 0, which shows that the variable Subscribers impact on the model signifficantly and Multiple/Adjusted R Squared shows a relative fitted Model. The equation for this Model is:
+Views=32.211*Subscriber+ 11653869.9
+```{r}
+options(scipen=999)
+ggplot(data1,aes(x=Subscribers/1000,y=Views/1000))+geom_point(aes(color=X5))+geom_smooth(method="lm",color="black")
+```
+Could the Model obtained be improved by adding other variables? Let's try to get a Multiple regression model. For this new Model, it could only add one more variable from the avaiable variables in the dataset, DeltaViews or DeltaSubscriber, because between them there is a strong correlation coefficient and it could affect the Model with collinearity. The variable that bring more value to the model will be the one kept.
+```{r}
+lmModelM<-lm(data=data1,Views~Subscribers+DeltaSubscriber)
+summary(lmModelM)
+```
+If the variable DeltaSubscriber is added, Multiple/Adjusted R squared doesn't change signifficantly in comparison with the model previously obtained. Let's try adding DeltaViews.
+```{r}
+lmModelM<-lm(data=data1,Views~Subscribers+DeltaViews)
+summary(lmModelM)
+```
+With the new addition, this is more fitted model. Multiple/Adjusted R-Square increases by 6 points and Pvalue shows that the variable impacts signifficantly on the model. The new equation is:
+Views=31.815*Subscribers + 297.53*DeltaViews- 12105787.073
+
+#Is there any speciffic day of the week where number of Views is siggnificantly different from the rest of the week?
+The data will be plotted through a Boxplot.First the data is ordered by the day of the week.
+```{r}
+data3<-data[order(data$Day),]                    
+data3$Day <- factor(data$Day, levels= c("Mon", 
+    "Tue", "Wed", "Thu", "Fri", "Sat","Sun"))
+data3[order(data3$Day), ]
+```
+
+```{r}
+ggplot(data3)+geom_boxplot(aes(x=Day,y=DeltaViews,color=Day))+labs(title = "Views per Day",y="Views")
+```
+Since some days are repeated 5 times in the dataset, and other days are only measured 4 times, let's group by Day of the week and do the Analysis for Average and Standard Deviation.
+
+```{r}
+data$Day<-as.factor(data$Day)
+data$Views<-as.numeric(data$Views)
+byDay<-group_by(data,Day)
+Summary1<-summarize(byDay,count=n(),AvgDeltaViews=mean(DeltaViews),AvgDeltaFollowers=mean(DeltaSubscriber),StDevDeltaViews=sd(DeltaViews),StDevDeltaFolllowers=sd(DeltaSubscriber))
+Summary1<-Summary1[order(Summary1$Day),]                    
+Summary1$Day <- factor(Summary1$Day, levels= c("Mon", 
+    "Tue", "Wed", "Thu", "Fri", "Sat","Sun"))
+Summary1[order(Summary1$Day), ]
+```
+```{r}
+ggplot(Summary1,aes(x=Day,y=AvgDeltaViews,fill=Day))+geom_bar(stat="identity",color="black")+labs(title = "Average Views per Day",y="Average Views")
+```
+It could be seen a difference between the Views for each Day of the week, but is this a signifficant difference? Let's run Anova for the Quantity of Views taking in grouped by the Day of the Week.The Analysis will be done removing the data from STU Channel, since given that the quantity of views and subscribers is not representative of a mature Channel.
+```{r}
+TopTen <- data[-c(1:30), ]
+```
+```{r}
+Anova<-aov(data=TopTen,formula= DeltaViews~Day)
+summary(Anova)
+```
+P value is almost 1, so there are no evidences to reject the Null Hipothesis. It could be concluded that there are no signifficant difference in the Quantity of Views grouped by each Day of the Week.
+
+#However if these Views are plotted by Day of the week and Channels just to see if the same conclusion applies for Channels. This plot will be done removing the data from STU Channel, since given that the quantity of views and subscribers is not representative of a mature Channel.
+```{r}
+byDay1<-group_by(TopTen,Day,X5)
+Summary2<-summarize(byDay1,count=n(),AverageDeltaViews=mean(DeltaViews),AverageDeltaSubscribers=mean(DeltaSubscriber))
+Summary2$Day <- factor(Summary2$Day, levels= c("Mon", 
+    "Tue", "Wed", "Thu", "Fri", "Sat","Sun"))
+Summary2[order(Summary2$Day), ]
+options(scipen=999)
+ggplot(Summary2,aes(x=Day,y=AverageDeltaViews))+geom_bar(stat="identity",aes(fill=X5),color="black")+facet_wrap(~X5)+labs(title="Average Views vs Day of the week and Channel",x="Day of the week",y="Average Views Per day")+theme(axis.text.x = element_text(angle = 45,size=7))
+```
+From the graph, it can be seen an equilibrated number of Views per channel by Day of the Week, except in Drdisrespect and Riotgames that there is a significant difference, let's run Anova for these 2 variables.
+#Drdisrespect
+```{r}
+Drdisrespect<-subset(data,X5=="Drdisrespect")
+AnovaDrdisrespect<-aov(data=Drdisrespect,formula= DeltaViews~Day)
+summary(AnovaDrdisrespect)
+```
+According to the P value is less than 0.05 (alpha), there is enough evidence to reject the null hyphotesis. It could be concluded that for the Channel Drdisrespect there are signifficant differences of getting Views according to the Day of the week. Now, let's find out which days are signifficantly different
+```{r}
+Tukey<-TukeyHSD(AnovaDrdisrespect)
+print(Tukey)
+```
+There is significant difference between Friday and Saturday/Sunday, and also between Sunday and Wednesday/Thursday. For this 4 combinations' pvalues are less than 0.05 proving that there are significant difference to confirm that they are different.
+#riotgames
+```{r}
+riotgames<-subset(data,X5=="riotgames")
+Anovariotgames<-aov(data=riotgames,formula= DeltaViews~Day)
+summary(Anovariotgames)
+```
+For riotgames, when the Anova is run, the pvalue is greater than 0.05, so there is no evidence to reject null hypothesis. It could be concluded that there is no significant difference in the number of Views per Day of the week for this channel.
+#What could be the behavior for the Average of Followers for the Top 10 Channels recorded each Day?
+Grouping the data by Date and estimating Average for the Total Views and Total Followers recorded each Day
+```{r}
+TopTen$Date<-as.Date(TopTen$Date,"%m/%d/%Y")
+byDate<-group_by(TopTen,Date)
+Summary3<-summarize(byDate,count=n(),DailyAvgViews=mean(Views),DailyAvgSubscribers=mean(Subscribers))
+Summary3
+```
+Now let's plot the Average of Followers for the Top 10 Channels
+```{r}
+last28<-Summary3[-c(1:2), ]
+ggplot(last28,aes(Date,DailyAvgSubscribers))+geom_point()+geom_smooth()+labs(title="Average Top 10 Channels Followers recorded each Day", subtitle = "www.socialblade.com" , x="Records from September 8th up to October 6th", y="Followers")
+```
+In the plot, it is shown a remarkable trend to increase followers by day as an Average for the Top 10 Channels, so Time Series Analysis could be helpful in a forecasting for the variable Followers.
+28 observations with a frequency of 4 to set this analysis weekly.
+```{r}
+tsData<-ts (last28$DailyAvgSubscribers, start=c(0), end=c(28),frequency=4)
+tsData
+plot(tsData)
+```
+
+```{r}
+decomposedRes <- decompose(tsData)
+stlRes <- stl(tsData, s.window = "period")
+plot (decomposedRes, type="o", col="red", lty="dashed")
+decomposedRes
+```
+```{r}
+fit <- stl(tsData, s.window="period")
+plot(fit)
+```
+In the previous graph the highest variance is explained through the variable Trend +/- 12500 followers, then Seasonality explained around +/- 1000 Followers and then Remainder explained the variance in +/-10000 followers
+Using this Times Series Model, let's graph a forecasting for Day 29 (October 7th) through the function Arima
+```{r}
+#install.packages("forecast")
+library(forecast)
+library(qcc)
+```
+
+
+```{r}
+fit<-auto.arima(tsData)
+forecast<-forecast(fit,h=4)
+plot(forecast, xlab="Days 0= Sep-08, 28= Oct-06",ylab= "Followers",main="Forecast Daily Average Followers Top T10 Channels")
+```
+#Getting the accuracy linked to this model
+```{r}
+accuracy(forecast)
+```
+```{r}
+data1<-read_csv("games_corrected.csv")
+```
+#Removing all the columns that came in this dataset and won't be used
+```{r}
+games_corrected<-data1[c(1:5)]
+```
+#Changing Header
+```{r}
+games_corrected<-setnames(games_corrected, old=c("games (1)","X2","X3","X4","X5"), new=c("Games", "Popularity","Viewers","Channels","Hour"))
+games_corrected$Games<-as.factor(games_corrected$Games)
+games_corrected$Popularity<-as.double(games_corrected$Popularity)
+games_corrected$Viewers<-as.double(games_corrected$Viewers)
+games_corrected$Channels<-as.double(games_corrected$Channels)
+```
+#Removing header from every observation
+```{r}
+games<-subset(games_corrected,Games!="name")
+```
+
+#Grouping by game
+```{r}
+byGame<-group_by(games,Games)
+Summary1<-summarize(byGame,count=n(),AvgViewers=mean(Viewers),AvgChannels=mean(Channels),StdViewers=sd(Viewers),StdChannels=sd(Channels))
+Summary1<-Summary1[order(-Summary1$AvgViewers),]
+Summary1
+```
+#Plotting Average Viewers vs. Channels
+```{r}
+ggplot(Summary1,aes(AvgViewers,AvgChannels))+geom_point(color="blue")+labs(title="Average Viewers vs. Average Channels per Game",subtitle="Twitch",x="Viewers",y="Channels")
+```
+#Setting seed
+```{r}
+set.seed(20)
+```
+#Creating dataframe without labels
+```{r}
+esport<-data.frame(AvgViewers=Summary1$AvgViewers,AvgChannels=Summary1$AvgChannels)
+head(esport)
+```
+#Setting Within-cluster sum of square
+```{r}
+wss<-numeric(15)
+for (k in 1:15)
+  wss[k]=sum(kmeans(esport, k,nstart=25)$withinss)
+```
+```{r}
+wssResults<-data.frame(k=c(1:15),wss=wss)
+wssResults
+```
+#Getting ideal k through Elbowing graph
+```{r}
+ggplot(data=wssResults,aes(x=k,y=wss))+geom_point()+geom_line()+labs(title="K-means:ESport",x="Number of Clusters k",y="Within Sum of Squares")
+```
+```{r}
+esportCluster<-kmeans(esport,2,nstart=25)
+esportCluster
+```
+#Setting the cluster for each game
+```{r}
+table(esportCluster$cluster,Summary1$Games)
+```
+
+```{r}
+#Add the cluster assignment to each point
+options(scipen=999)
+esport$Cluster<-as.factor(esportCluster$cluster)
+
+#Get Centroids
+centroids<-as.data.frame(esportCluster$centers)
+centroids$Cluster<-as.factor(c(1:2))
+
+#Visualize cluster assignments
+ggplot(data=esport,aes(AvgViewers,AvgChannels,color=Cluster))+geom_point()+geom_point(data=centroids,aes(x=AvgViewers,y=AvgChannels,fill=Cluster),size=5,shape=13)+labs(title="Average Viewers vs. Average Channels per Game",subtitle="Twitch",x="Viewers",y="Channels")
+```
+```{r}
+TopTenAvg<-subset(Summary1,AvgViewers>58859)
+options(scipen=999)
+ggplot(TopTenAvg,aes(x=Games,y=AvgViewers))+geom_bar(stat="identity", aes(fill=Games),color="black",leyend=FALSE)+labs(title="Top Ten Games vs Average Viewers",x="Games",y="Average Viewers")+theme(axis.text.x = element_text(angle = 90,size=7),legend.position = "none")
+```
+#Classifying the games in Trivial and Main
+```{r}
+gamesViewers<-Summary1[c(1,3)]
+trivialsGames<-subset(gamesViewers,AvgViewers<65500&AvgViewers>58859)
+mainGames<-subset(gamesViewers,AvgViewers>=65500)
+otherGames<-data.frame(Games="others","AvgViewers"=sum(trivialsGames$AvgViewers))
+destParetoGames<-rbind(mainGames,otherGames)
+destParetoGames$frequency<-prop.table(destParetoGames$AvgViewers)
+destParetoGames$cumFrequency<-cumsum(destParetoGames$frequency)
+destParetoGames
+```
+#Graphing Pareto
+```{r}
+options(scipen=999)
+TipoGames<-destParetoGames$AvgViewers
+names(TipoGames)<-(destParetoGames$Games)
+TipoGames
+pareto.chart(TipoGames,cumperc=seq(0,100,by=20,ylim=80))
+```
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
